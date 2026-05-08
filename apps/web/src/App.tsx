@@ -11,6 +11,7 @@ import { useProjectStore } from "./stores/project-store";
 import { useRouter } from "./hooks/use-router";
 import { useProjectRecovery } from "./hooks/useProjectRecovery";
 import { useKieAIPoller } from "./hooks/useKieAIPoller";
+import { installApgenBridge } from "./bridges/apgen-bridge";
 import { SOCIAL_MEDIA_PRESETS, type SocialMediaCategory } from "@openreel/core";
 import { TooltipProvider } from "@openreel/ui";
 
@@ -45,6 +46,10 @@ function App() {
   const hasHandledInitialRoute = useRef(false);
 
   useKieAIPoller();
+
+  useEffect(() => {
+    installApgenBridge();
+  }, []);
 
   useEffect(() => {
     if (hasHandledInitialRoute.current) return;

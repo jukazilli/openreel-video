@@ -1,11 +1,11 @@
 {
-  "name": "OpenReel",
-  "short_name": "OpenReel",
-  "description": "Professional browser-based video, audio, and photo editing application",
+  "name": "APGen Video Studio",
+  "short_name": "APGen Video",
+  "description": "Editor de video browser-based para o fluxo APGen.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#3b82f6",
+  "background_color": "#002233",
+  "theme_color": "#00dbff",
   "orientation": "landscape",
   "icons": [
     {

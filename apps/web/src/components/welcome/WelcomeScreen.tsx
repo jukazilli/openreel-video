@@ -17,6 +17,7 @@ import { RecentProjects } from "./RecentProjects";
 import { useRouter } from "../../hooks/use-router";
 import { useEditorPreload } from "../../hooks/useEditorPreload";
 import { useAnalytics, AnalyticsEvents } from "../../hooks/useAnalytics";
+import { APGEN_BRAND } from "../../config/apgen-brand";
 
 interface FormatOption {
   id: string;
@@ -34,7 +35,7 @@ const FORMAT_OPTIONS: FormatOption[] = [
     preset: "tiktok",
     label: "Vertical",
     description: "TikTok, Reels, Shorts",
-    dimensions: "1080 × 1920",
+    dimensions: "1080 x 1920",
     icon: Smartphone,
     gradient: "from-violet-500/20 to-fuchsia-500/20",
   },
@@ -43,87 +44,32 @@ const FORMAT_OPTIONS: FormatOption[] = [
     preset: "youtube-video",
     label: "Horizontal",
     description: "YouTube, Vimeo, Web",
-    dimensions: "1920 × 1080",
+    dimensions: "1920 x 1080",
     icon: Monitor,
     gradient: "from-blue-500/20 to-cyan-500/20",
   },
   {
     id: "square",
     preset: "instagram-post",
-    label: "Square",
+    label: "Quadrado",
     description: "Instagram, Facebook",
-    dimensions: "1080 × 1080",
+    dimensions: "1080 x 1080",
     icon: Square,
     gradient: "from-orange-500/20 to-rose-500/20",
   },
 ];
 
-const OpenReelLogo: React.FC<{ className?: string }> = ({ className = "" }) => (
+const ApgenLogo: React.FC<{ className?: string }> = ({ className = "" }) => (
   <svg
-    viewBox="0 0 490 490"
+    viewBox="0 0 64 64"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     className={className}
   >
-    <path
-      d="M245 24.5C123.223 24.5 24.5 123.223 24.5 245s98.723 220.5 220.5 220.5 220.5-98.723 220.5-220.5S366.777 24.5 245 24.5Z"
-      stroke="currentColor"
-      strokeWidth="30.625"
-    />
-    <g>
-      <path
-        d="M245 98v73.5"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M392 245h-73.5"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M245 392v-73.5"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M98 245h73.5"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="m348.941 141.059-51.965 51.965"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="m348.941 348.941-51.965-51.965"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="m141.059 348.941 51.965-51.965"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="m141.059 141.059 51.965 51.965"
-        stroke="currentColor"
-        strokeWidth="24.5"
-        strokeLinecap="round"
-      />
-    </g>
-    <path
-      d="M294 245a49 49 0 0 1-49 49 49 49 0 0 1-49-49 49 49 0 0 1 98 0"
-      fill="currentColor"
-    />
+    <rect width="64" height="64" rx="14" fill="#002233" />
+    <path d="M16 45 29 15h7l13 30h-8l-2.4-6.2H26.2L23.8 45H16Z" fill="#00dbff" />
+    <path d="M28.4 32.6h7.8L32.3 22l-3.9 10.6Z" fill="#ffffff" />
+    <path d="M44 19h7v26h-7V19Z" fill="#00ffd4" />
   </svg>
 );
 
@@ -243,29 +189,29 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ initialTab }) => {
 
   return (
     <div className="fixed inset-0 z-50 bg-background overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(34,197,94,0.05),transparent_60%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(34,197,94,0.03),transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(0,219,255,0.08),transparent_60%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(0,255,212,0.05),transparent_50%)]" />
 
       <div className="relative h-full flex flex-col items-center justify-center px-6">
         <div className="w-full max-w-3xl">
           <div className="flex flex-col items-center text-center mb-12">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 text-primary">
-                <OpenReelLogo className="w-full h-full" />
+                <ApgenLogo className="w-full h-full" />
               </div>
               <span className="text-xl font-semibold text-text-primary tracking-tight">
-                Open Reel Video
+                {APGEN_BRAND.productName}
               </span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl font-bold text-text-primary tracking-tight mb-3">
-              From idea to export.
+              Edite o video da sua apresentacao.
             </h1>
             <p className="text-xl text-text-secondary mb-8">
-              In your browser.
+              No navegador, sem enviar o arquivo ao backend.
             </p>
             <p className="text-base text-text-muted max-w-md">
-              Pick a format and start creating. You can change this anytime.
+              Escolha um formato para importar, cortar, revisar e devolver o export ao APGen.
             </p>
           </div>
 
@@ -328,7 +274,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ initialTab }) => {
                     transition-all duration-200
                   `}
                   >
-                    Start creating
+                    Comecar edicao
                     <ArrowRight size={14} />
                   </div>
                 </button>
@@ -343,7 +289,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ initialTab }) => {
               className="rounded-xl"
             >
               <Layers size={16} />
-              Browse templates
+              Ver templates
             </Button>
             <Button
               variant="outline"
@@ -351,7 +297,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ initialTab }) => {
               className="rounded-xl"
             >
               <Clock size={16} />
-              Recent projects
+              Projetos recentes
             </Button>
             <Button
               variant="outline"
@@ -359,7 +305,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ initialTab }) => {
               className="rounded-xl"
             >
               <FolderOpen size={16} />
-              Open editor
+              Abrir editor
             </Button>
           </div>
         </div>
@@ -375,18 +321,18 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({ initialTab }) => {
               htmlFor="skip-welcome"
               className="text-xs text-text-muted cursor-pointer"
             >
-              Skip on startup
+              Pular ao iniciar
             </Label>
           </div>
 
-          <span className="text-text-muted/30">·</span>
+          <span className="text-text-muted/30">/</span>
 
           <p className="text-xs text-text-muted/60">
-            Press{" "}
+            Aperte{" "}
             <kbd className="px-1.5 py-0.5 bg-background-tertiary border border-border rounded text-text-muted font-mono text-[10px]">
               Esc
             </kbd>{" "}
-            to skip
+            para pular
           </p>
         </div>
       </div>
