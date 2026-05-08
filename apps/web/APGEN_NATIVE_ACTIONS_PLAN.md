@@ -365,3 +365,22 @@ Confirmar se o primeiro corte de implementacao deve seguir esta ordem:
 4. mover aplicar slide para o estado pos-upload.
 
 Recomendacao: aprovar essa ordem. Ela reduz duplicidade rapidamente e deixa os riscos maiores, gravacao cross-frame e upload Drive, isolados em etapas verificaveis.
+
+## Status de implementacao
+
+Implementado em 2026-05-08:
+
+- `ORE-9A`: modo `integration=apgen`, eventos `ready/export-started/export-finished/drive-uploaded` e request/response bidirecional por `postMessage`.
+- `ORE-9B`: barra operacional POC removida da experiencia principal do APGen; debug fica atras de `VITE_OPENREEL_DEBUG_TOOLBAR=true`.
+- `ORE-9C`: botao nativo `Record` tenta gravacao APGen via parent e cai para o recorder nativo OpenReel quando o navegador ou parent bloqueia a acao.
+- `ORE-9D`: botao nativo `EXPORT` usa export em memoria no modo APGen e mostra acoes inline para Drive/download.
+- `ORE-9E`: apos upload Drive, a acao de aplicar no slide `Videos` fica no estado pos-export do OpenReel.
+
+Validado:
+
+- `pnpm --filter @openreel/web build`
+- `pnpm build` no APGen
+
+Risco residual:
+
+- A gravacao APGen disparada a partir de iframe pode ser bloqueada por politica de ativacao do navegador. O fallback para recorder nativo OpenReel foi mantido para preservar a jornada.

@@ -32,6 +32,53 @@ type ApgenExportEditedMessage = {
   };
 };
 
+type ApgenParentSuccessMessage =
+  | {
+      source?: string;
+      type?: "APGEN_SCREEN_RECORDING_RESULT";
+      requestId?: string;
+      ok?: true;
+      file?: File;
+      payload?: {
+        addToTimeline?: boolean;
+        startTime?: number;
+      };
+    }
+  | {
+      source?: string;
+      type?: "APGEN_DRIVE_UPLOAD_RESULT";
+      requestId?: string;
+      ok?: true;
+      result?: {
+        fileId: string;
+        fileName: string;
+        webViewLink: string | null;
+        folderId: string;
+        folderName: string;
+      };
+    }
+  | {
+      source?: string;
+      type?: "APGEN_APPLY_VIDEO_SLIDE_RESULT";
+      requestId?: string;
+      ok?: true;
+      result?: {
+        applied: boolean;
+        message: string;
+      };
+    };
+
+type ApgenParentErrorMessage = {
+  source?: string;
+  type?: "APGEN_ACTION_ERROR";
+  requestId?: string;
+  ok?: false;
+  error?: string;
+  recoverable?: boolean;
+};
+
+type ApgenParentMessage = ApgenParentSuccessMessage | ApgenParentErrorMessage;
+
 type ApgenBridgeMessage =
   | ApgenImportMessage
   | ApgenValidateEditingMessage
@@ -70,6 +117,85 @@ const isApgenExportEditedMessage = (
 };
 
 let bridgeInstalled = false;
+
+const createRequestId = () =>
+  `apgen-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const parseHashParams = () => {
+  if (typeof window === "undefined") return new URLSearchParams();
+  const [, queryString = ""] = window.location.hash.split("?");
+  return new URLSearchParams(queryString);
+};
+
+export function isApgenIntegrationMode() {
+  if (typeof window === "undefined") return false;
+  const envEnabled = import.meta.env.VITE_APGEN_INTEGRATION_MODE === "true";
+  const searchParams = new URLSearchParams(window.location.search);
+  const hashParams = parseHashParams();
+  return (
+    envEnabled ||
+    searchParams.get("integration") === "apgen" ||
+    hashParams.get("integration") === "apgen"
+  );
+}
+
+const hasParentWindow = () =>
+  typeof window !== "undefined" && window.parent && window.parent !== window;
+
+function requestApgenParent<T>(
+  type: string,
+  payload: Record<string, unknown>,
+  timeoutMs = 120000,
+): Promise<T> {
+  if (!isApgenIntegrationMode() || !hasParentWindow()) {
+    return Promise.reject(new Error("APGen integration parent is not available"));
+  }
+
+  const requestId = createRequestId();
+
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      window.removeEventListener("message", handleMessage);
+      reject(new Error("APGen did not respond in time"));
+    }, timeoutMs);
+
+    const handleMessage = (event: MessageEvent<ApgenParentMessage>) => {
+      if (event.source !== window.parent) return;
+      if (event.data?.source !== "apgen") return;
+      if (event.data?.requestId !== requestId) return;
+
+      window.clearTimeout(timeout);
+      window.removeEventListener("message", handleMessage);
+
+      if (event.data.type === "APGEN_ACTION_ERROR" || event.data.ok === false) {
+        reject(new Error(event.data.error || "APGen action failed"));
+        return;
+      }
+
+      resolve(event.data as T);
+    };
+
+    window.addEventListener("message", handleMessage);
+    window.parent.postMessage({
+      source: "openreel",
+      type,
+      requestId,
+      payload,
+    }, "*");
+  });
+}
+
+export function notifyApgenEditorEvent(
+  event: "ready" | "media-imported" | "export-started" | "export-finished" | "drive-uploaded",
+  metadata: Record<string, unknown> = {},
+) {
+  if (!isApgenIntegrationMode() || !hasParentWindow()) return;
+  window.parent.postMessage({
+    source: "openreel",
+    type: "APGEN_EDITOR_EVENT",
+    payload: { event, metadata },
+  }, "*");
+}
 
 const postBridgeResult = (
   event: MessageEvent<ApgenBridgeMessage>,
@@ -274,6 +400,76 @@ const runEditedExport = async (message: ApgenExportEditedMessage) => {
   };
 };
 
+export async function exportApgenEditedVideo(options: {
+  fileName?: string;
+  settings?: Partial<VideoExportSettings>;
+} = {}) {
+  notifyApgenEditorEvent("export-started", {
+    fileName: options.fileName,
+    format: options.settings?.format,
+  });
+  const result = await runEditedExport({
+    source: "apgen",
+    type: "APGEN_OPENREEL_EXPORT_EDITED",
+    payload: options,
+  });
+  notifyApgenEditorEvent("export-finished", {
+    fileName: result.fileName,
+    mimeType: result.mimeType,
+    durationSec: result.durationSec,
+    sizeBytes: result.sizeBytes,
+  });
+  return result;
+}
+
+export async function requestApgenScreenRecording(options: {
+  includeMicrophone?: boolean;
+  title?: string;
+}) {
+  return requestApgenParent<Extract<ApgenParentSuccessMessage, { type?: "APGEN_SCREEN_RECORDING_RESULT" }>>(
+    "APGEN_REQUEST_SCREEN_RECORDING",
+    {
+      includeMicrophone: options.includeMicrophone ?? true,
+      title: options.title || "openreel",
+    },
+    10 * 60 * 1000,
+  );
+}
+
+export async function requestApgenDriveUpload(payload: {
+  fileName: string;
+  mimeType: string;
+  durationSec: number;
+  sizeBytes: number;
+  blob: Blob;
+}) {
+  const response = await requestApgenParent<Extract<ApgenParentSuccessMessage, { type?: "APGEN_DRIVE_UPLOAD_RESULT" }>>(
+    "APGEN_REQUEST_DRIVE_UPLOAD",
+    payload as unknown as Record<string, unknown>,
+    10 * 60 * 1000,
+  );
+  if (response.result) {
+    notifyApgenEditorEvent("drive-uploaded", {
+      fileName: response.result.fileName,
+      fileId: response.result.fileId,
+      folderId: response.result.folderId,
+    });
+  }
+  return response;
+}
+
+export async function requestApgenApplyVideoSlide(payload: {
+  fileId: string;
+  fileName: string;
+  webViewLink: string;
+}) {
+  return requestApgenParent<Extract<ApgenParentSuccessMessage, { type?: "APGEN_APPLY_VIDEO_SLIDE_RESULT" }>>(
+    "APGEN_REQUEST_APPLY_VIDEO_SLIDE",
+    payload,
+    120000,
+  );
+}
+
 const runEditingValidation = async (message: ApgenValidateEditingMessage) => {
   const store = useProjectStore.getState();
   const target = getEditableClip(message.payload?.mediaId, message.payload?.clipId);
@@ -354,6 +550,7 @@ const runEditingValidation = async (message: ApgenValidateEditingMessage) => {
 export function installApgenBridge() {
   if (bridgeInstalled || typeof window === "undefined") return;
   bridgeInstalled = true;
+  notifyApgenEditorEvent("ready");
 
   window.addEventListener("message", async (event) => {
     if (isApgenValidateEditingMessage(event.data)) {

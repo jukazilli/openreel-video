@@ -12,6 +12,8 @@ import {
   Loader2,
   X,
   Check,
+  Cloud,
+  Download,
   FileCode,
   Settings,
   Zap,
@@ -21,6 +23,7 @@ import {
   Diamond,
   Sparkles,
   Play,
+  Link2,
 } from "lucide-react";
 import { useProjectStore } from "../../stores/project-store";
 import { useUIStore } from "../../stores/ui-store";
@@ -45,6 +48,13 @@ import { toast } from "../../stores/notification-store";
 import { useSettingsStore } from "../../stores/settings-store";
 import { useAnalytics, AnalyticsEvents } from "../../hooks/useAnalytics";
 import { startTour, ONBOARDING_KEY, startMoGraphTour, MOGRAPH_TOUR_KEY } from "./tour";
+import {
+  exportApgenEditedVideo,
+  isApgenIntegrationMode,
+  requestApgenApplyVideoSlide,
+  requestApgenDriveUpload,
+  requestApgenScreenRecording,
+} from "../../bridges/apgen-bridge";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -77,6 +87,22 @@ interface ExportState {
   complete: boolean;
 }
 
+interface ApgenExportResult {
+  blob: Blob;
+  fileName: string;
+  mimeType: string;
+  durationSec: number;
+  sizeBytes: number;
+}
+
+interface ApgenUploadedVideo {
+  fileId: string;
+  fileName: string;
+  webViewLink: string | null;
+  folderId: string;
+  folderName: string;
+}
+
 export const Toolbar: React.FC = () => {
   const { project } = useProjectStore();
   const {
@@ -95,8 +121,9 @@ export const Toolbar: React.FC = () => {
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isRecorderOpen, setIsRecorderOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const { importMedia } = useProjectStore();
+  const { importMedia, addClipToNewTrack } = useProjectStore();
   const { track } = useAnalytics();
+  const apgenIntegrationMode = isApgenIntegrationMode();
 
   const handleStartTour = useCallback(() => {
     localStorage.removeItem(ONBOARDING_KEY);
@@ -121,6 +148,10 @@ export const Toolbar: React.FC = () => {
     error: null,
     complete: false,
   });
+  const [apgenExportResult, setApgenExportResult] = useState<ApgenExportResult | null>(null);
+  const [apgenUploadedVideo, setApgenUploadedVideo] = useState<ApgenUploadedVideo | null>(null);
+  const [apgenDriveUploading, setApgenDriveUploading] = useState(false);
+  const [apgenApplyingSlide, setApgenApplyingSlide] = useState(false);
   const [deviceProfile, setDeviceProfile] = useState<DeviceProfile | null>(null);
   const [exportEstimates, setExportEstimates] = useState<Map<string, TimeEstimate>>(new Map());
 
@@ -293,6 +324,104 @@ export const Toolbar: React.FC = () => {
     } as unknown as FileSystemWritableFileStream;
   }, []);
 
+  const downloadApgenExport = useCallback(() => {
+    if (!apgenExportResult) return;
+    const url = URL.createObjectURL(apgenExportResult.blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = apgenExportResult.fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [apgenExportResult]);
+
+  const runApgenVideoExport = useCallback(
+    async (settings: Partial<VideoExportSettings>, fileName: string) => {
+      setApgenExportResult(null);
+      setApgenUploadedVideo(null);
+      setExportState({
+        isExporting: true,
+        progress: 0,
+        phase: "Preparing APGen export...",
+        error: null,
+        complete: false,
+      });
+
+      const result = await exportApgenEditedVideo({ fileName, settings });
+      setApgenExportResult(result);
+      setExportState({
+        isExporting: false,
+        progress: 100,
+        phase: "Ready for Drive",
+        error: null,
+        complete: true,
+      });
+
+      track(AnalyticsEvents.PROJECT_EXPORTED, {
+        format: settings.format ?? "webm",
+        codec: settings.codec ?? "vp8",
+        width: settings.width ?? project.settings.width,
+        height: settings.height ?? project.settings.height,
+        frameRate: settings.frameRate ?? project.settings.frameRate,
+        duration: project.timeline?.duration ?? 0,
+        exportType: "apgen-drive",
+      });
+    },
+    [project, track],
+  );
+
+  const uploadApgenExportToDrive = useCallback(async () => {
+    if (!apgenExportResult || apgenDriveUploading) return;
+
+    setApgenDriveUploading(true);
+    setExportState((prev) => ({ ...prev, phase: "Sending to Drive..." }));
+    try {
+      const response = await requestApgenDriveUpload({
+        fileName: apgenExportResult.fileName,
+        mimeType: apgenExportResult.mimeType,
+        durationSec: apgenExportResult.durationSec,
+        sizeBytes: apgenExportResult.sizeBytes,
+        blob: apgenExportResult.blob,
+      });
+
+      if (!response.result) {
+        throw new Error("APGen did not return Drive metadata");
+      }
+
+      setApgenUploadedVideo(response.result);
+      setExportState((prev) => ({ ...prev, phase: "Saved to Drive" }));
+      toast.success("Saved to Drive", response.result.fileName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Drive upload failed";
+      setExportState((prev) => ({ ...prev, phase: "Ready for Drive", error: message }));
+      toast.error("Drive upload failed", message);
+    } finally {
+      setApgenDriveUploading(false);
+    }
+  }, [apgenDriveUploading, apgenExportResult]);
+
+  const applyApgenVideoToSlide = useCallback(async () => {
+    if (!apgenUploadedVideo?.webViewLink || apgenApplyingSlide) return;
+
+    setApgenApplyingSlide(true);
+    try {
+      const response = await requestApgenApplyVideoSlide({
+        fileId: apgenUploadedVideo.fileId,
+        fileName: apgenUploadedVideo.fileName,
+        webViewLink: apgenUploadedVideo.webViewLink,
+      });
+      toast.success("Applied to Videos slide", response.result?.message || apgenUploadedVideo.fileName);
+    } catch (error) {
+      toast.error(
+        "Could not apply to slide",
+        error instanceof Error ? error.message : "APGen rejected the slide update",
+      );
+    } finally {
+      setApgenApplyingSlide(false);
+    }
+  }, [apgenApplyingSlide, apgenUploadedVideo]);
+
   const handleExport = useCallback(
     async (type: ExportType) => {
       setIsExportOpen(false);
@@ -378,6 +507,18 @@ export const Toolbar: React.FC = () => {
           };
 
           const preset = presets[type] ?? presets.mp4;
+          if (apgenIntegrationMode) {
+            await runApgenVideoExport(
+              {
+                ...preset.settings,
+                format: preset.settings.format || "webm",
+                codec: preset.settings.codec || "vp8",
+              },
+              `${project.name || "apgen-video-editado"}.${preset.ext === "mov" ? "webm" : preset.ext}`,
+            );
+            return;
+          }
+
           const writable = await showSavePicker(`${project.name || "export"}.${preset.ext}`, preset.ext);
 
           setExportState({
@@ -405,7 +546,7 @@ export const Toolbar: React.FC = () => {
         }));
       }
     },
-    [project, track, runExport, showSavePicker],
+    [apgenIntegrationMode, project, runApgenVideoExport, runExport, showSavePicker, track],
   );
 
   const handleCancelExport = useCallback(() => {
@@ -426,6 +567,11 @@ export const Toolbar: React.FC = () => {
 
       try {
         const ext = settings.format === "mov" ? "mov" : settings.format === "webm" ? "webm" : "mp4";
+        if (apgenIntegrationMode) {
+          await runApgenVideoExport(settings, `${project.name || "apgen-video-editado"}.${ext}`);
+          return;
+        }
+
         const writable = await showSavePicker(`${project.name || "export"}.${ext}`, ext);
 
         setExportState({
@@ -475,8 +621,45 @@ export const Toolbar: React.FC = () => {
         }));
       }
     },
-    [project, track, runExport, showSavePicker],
+    [apgenIntegrationMode, project, runApgenVideoExport, runExport, showSavePicker, track],
   );
+
+  const handleRecordClick = useCallback(async () => {
+    if (!apgenIntegrationMode) {
+      setIsRecorderOpen(true);
+      return;
+    }
+
+    try {
+      toast.info(
+        "APGen recording",
+        "Select a screen to capture. Stop sharing in the browser control to finish.",
+      );
+      const response = await requestApgenScreenRecording({
+        includeMicrophone: true,
+        title: project.name || "openreel",
+      });
+
+      if (!response.file) {
+        throw new Error("APGen did not return a recording file");
+      }
+
+      const result = await importMedia(response.file);
+      if (!result.success) {
+        throw new Error(result.error?.message || "Failed to import APGen recording");
+      }
+
+      if (response.payload?.addToTimeline !== false && result.actionId) {
+        await addClipToNewTrack(result.actionId, response.payload?.startTime || 0);
+      }
+
+      toast.success("APGen recording imported", response.file.name);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "APGen recording failed";
+      toast.error("APGen recording unavailable", `${message}. Opening native recorder.`);
+      setIsRecorderOpen(true);
+    }
+  }, [addClipToNewTrack, apgenIntegrationMode, importMedia, project.name]);
 
 
   const handleRecordingComplete = useCallback(
@@ -856,7 +1039,7 @@ export const Toolbar: React.FC = () => {
         <Tooltip>
           <TooltipTrigger asChild>
             <button
-              onClick={() => setIsRecorderOpen(true)}
+              onClick={handleRecordClick}
               className="flex items-center gap-2 px-3 py-2 bg-error/10 hover:bg-error/20 text-error rounded-lg transition-colors"
             >
               <Circle size={14} className="fill-current" />
@@ -903,9 +1086,40 @@ export const Toolbar: React.FC = () => {
               </button>
             </div>
           ) : exportState.complete ? (
-            <div className="h-10 px-4 bg-primary/10 border border-primary/30 rounded-lg flex items-center gap-2">
-              <Check size={14} className="text-primary" />
-              <span className="text-xs text-primary">Downloaded!</span>
+            <div className="min-h-10 px-3 py-1.5 bg-primary/10 border border-primary/30 rounded-lg flex items-center gap-2">
+              <Check size={14} className="text-primary shrink-0" />
+              {apgenIntegrationMode && apgenExportResult ? (
+                <>
+                  <span className="text-xs text-primary whitespace-nowrap">
+                    {apgenUploadedVideo ? "Drive ready" : "Export ready"}
+                  </span>
+                  <button
+                    onClick={uploadApgenExportToDrive}
+                    disabled={apgenDriveUploading}
+                    className="p-1.5 rounded-md bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+                    title="Send to Drive"
+                  >
+                    <Cloud size={13} />
+                  </button>
+                  <button
+                    onClick={applyApgenVideoToSlide}
+                    disabled={!apgenUploadedVideo?.webViewLink || apgenApplyingSlide}
+                    className="p-1.5 rounded-md bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+                    title="Apply to Videos slide"
+                  >
+                    <Link2 size={13} />
+                  </button>
+                  <button
+                    onClick={downloadApgenExport}
+                    className="p-1.5 rounded-md bg-background-tertiary text-text-secondary hover:text-text-primary"
+                    title="Download file"
+                  >
+                    <Download size={13} />
+                  </button>
+                </>
+              ) : (
+                <span className="text-xs text-primary">Downloaded!</span>
+              )}
             </div>
           ) : (
             <DropdownMenu open={isExportOpen} onOpenChange={setIsExportOpen}>
