@@ -296,6 +296,8 @@ export const Preview: React.FC = () => {
   const [showZoomMenu, setShowZoomMenu] = useState(false);
 
   const ZOOM_OPTIONS = [
+    { label: "50%", value: 0.5 },
+    { label: "75%", value: 0.75 },
     { label: "100%", value: 1 },
     { label: "125%", value: 1.25 },
     { label: "150%", value: 1.5 },
@@ -4896,7 +4898,7 @@ export const Preview: React.FC = () => {
       >
         <div
           ref={overlayRef}
-          className={`relative bg-black overflow-hidden transition-all duration-300 ${
+          className={`relative bg-black overflow-visible transition-all duration-300 ${
             isMaximized || isFullscreen
               ? "rounded-none ring-0 shadow-none"
               : "shadow-2xl rounded-xl ring-1 ring-border shadow-[0_0_50px_rgba(0,0,0,0.5)]"
