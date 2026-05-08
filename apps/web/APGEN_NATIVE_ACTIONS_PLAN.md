@@ -438,3 +438,24 @@ Status:
 - `Gravacao avulsa` no popup `Criar` do APGen passou a abrir o OpenReel/APGen Video Studio em vez do editor antigo.
 - Validado por `pnpm --filter @openreel/web build` no OpenReel e `pnpm build` no APGen.
 - Smoke real com usuario autenticado, OAuth/Drive e export ficou como validacao manual do usuario; bugs encontrados devem entrar como correcao pontual em novo corte.
+
+## Hardening transversal APGen/OpenReel
+
+O plano de seguranca, performance regional e controle de recursos do editor passou a ser governado pelo contrato APGen:
+
+- `C:\projetos\apgen\docs\security-performance-hardening-contract.md`
+
+Pontos que afetam diretamente o OpenReel:
+
+- manter o editor como app client-side sem upload de blobs ao backend;
+- preservar COOP/COEP e `frame-ancestors` para embed seguro no APGen;
+- implementar um budget de recursos gerenciados do editor com limite alvo de 700 MB;
+- validar que `APGEN_OPENREEL_IMPORT_MEDIA`, export e Drive seguem sem expor tokens, blobs ou dados de projeto em logs.
+
+Status do primeiro corte:
+
+- Implementado em `apps/web/src/utils/editor-resource-budget.ts` e aplicado em `apps/web/src/stores/project-store.ts`.
+- O limite suave e 600 MB; acima dele a importacao ainda pode concluir com warning.
+- O limite duro e 700 MB; importacao e substituicao de midia sao bloqueadas antes do decode quando o total projetado ultrapassa o budget.
+- A regra cobre import manual, gravacao nativa do OpenReel, handoff APGen e substituicao de asset, porque todos passam por `importMedia` ou `replaceMediaAsset`.
+- LRU de object URLs, thumbnails, previews, waveform e buffers de export continua pendente para um segundo corte de otimizacao.

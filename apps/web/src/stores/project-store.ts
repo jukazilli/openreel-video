@@ -57,6 +57,7 @@ import {
   loadDirectoryHandle,
 } from "../services/media-storage";
 import { restoreMediaItem } from "../utils/media-recovery";
+import { checkEditorResourceBudget } from "../utils/editor-resource-budget";
 import { projectManager } from "../services/project-manager";
 
 /**
@@ -576,6 +577,17 @@ export const useProjectStore = create<ProjectState>()(
       // Media library actions
       importMedia: async (file: File) => {
         const { project } = get();
+        const budget = checkEditorResourceBudget(project.mediaLibrary.items, file);
+
+        if (budget.hardExceeded) {
+          return {
+            success: false,
+            error: {
+              code: "STORAGE_FULL" as const,
+              message: budget.message,
+            },
+          };
+        }
 
         try {
           const mediaBridge = getMediaBridge();
@@ -746,6 +758,9 @@ export const useProjectStore = create<ProjectState>()(
           return {
             success: true,
             actionId: newMediaItem.id,
+            warnings: budget.softExceeded
+              ? ["Editor resource budget is above 600 MB. Remove unused media before importing larger files."]
+              : undefined,
           };
         } catch (error) {
           return {
@@ -779,6 +794,19 @@ export const useProjectStore = create<ProjectState>()(
 
       replaceMediaAsset: async (mediaId: string, file: File, sourceFolder?: string) => {
         const { project } = get();
+        const budget = checkEditorResourceBudget(project.mediaLibrary.items, file, {
+          replaceMediaId: mediaId,
+        });
+
+        if (budget.hardExceeded) {
+          return {
+            success: false,
+            error: {
+              code: "STORAGE_FULL" as const,
+              message: budget.message,
+            },
+          };
+        }
 
         try {
           const mediaBridge = getMediaBridge();
@@ -886,6 +914,9 @@ export const useProjectStore = create<ProjectState>()(
           return {
             success: true,
             actionId: uuidv4(),
+            warnings: budget.softExceeded
+              ? ["Editor resource budget is above 600 MB. Remove unused media before importing larger files."]
+              : undefined,
           };
         } catch (error) {
           return {
