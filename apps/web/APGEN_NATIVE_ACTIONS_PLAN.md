@@ -384,3 +384,52 @@ Validado:
 Risco residual:
 
 - A gravacao APGen disparada a partir de iframe pode ser bloqueada por politica de ativacao do navegador. O fallback para recorder nativo OpenReel foi mantido para preservar a jornada.
+
+## ORE-10: dependencia do fluxo `Gravar e editar`
+
+O proximo corte nasce no APGen, antes do usuario chegar ao OpenReel.
+
+Objetivo:
+
+- manter `Gravar` como fluxo simples APGen;
+- criar `Gravar e editar` no editor de apresentacao do APGen;
+- abrir o APGen Video Studio em uma nova aba/janela;
+- importar automaticamente o video recem gravado no OpenReel;
+- depois do export/upload Drive, permitir que a UI nativa do OpenReel acione `Anexar link na apresentacao`.
+
+Decisao para o OpenReel:
+
+- Nao adicionar uma barra APGen paralela.
+- Nao criar OAuth/Drive dentro do OpenReel.
+- Nao assumir conhecimento de trilha, nivel ou matriz.
+- Continuar tratando APGen como parent integrado via `integration=apgen`.
+- Aceitar `APGEN_OPENREEL_IMPORT_MEDIA` como entrada automatica de midia, igual ao contrato ORE-9.
+- Continuar disparando `APGEN_REQUEST_DRIVE_UPLOAD` e `APGEN_REQUEST_APPLY_VIDEO_SLIDE` no pos-export.
+
+Contrato esperado do parent APGen:
+
+```ts
+type ApplyVideoSlidePayload = {
+  webViewLink: string;
+  insertMode: "before-closing";
+  handoffId?: string;
+  projectId?: string | null;
+  trailNodeId?: string | null;
+  presentationId?: string | null;
+};
+```
+
+Regra de UX:
+
+- O video deve chegar em `Assets` e na timeline sem import manual.
+- O usuario deve continuar editando/exportando pelo layout original do OpenReel.
+- A acao de anexar link deve aparecer somente apos upload Drive concluido com sucesso.
+
+Documento APGen do corte:
+
+- `C:\projetos\apgen\docs\openreel-record-edit-flow-contract.md`
+
+Status:
+
+- Planejado em branch `feature/ore-10-record-edit-flow`.
+- Implementacao pendente de aprovacao.
