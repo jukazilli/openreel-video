@@ -384,3 +384,57 @@ Validado:
 Risco residual:
 
 - A gravacao APGen disparada a partir de iframe pode ser bloqueada por politica de ativacao do navegador. O fallback para recorder nativo OpenReel foi mantido para preservar a jornada.
+
+## ORE-10: dependencia do fluxo `Gravar e editar`
+
+O proximo corte nasce no APGen, antes do usuario chegar ao OpenReel.
+
+Objetivo:
+
+- manter `Gravar` como fluxo simples APGen;
+- criar `Gravar e editar` no editor de apresentacao do APGen;
+- abrir o APGen Video Studio em uma nova aba/janela;
+- importar automaticamente o video recem gravado no OpenReel;
+- depois do export/upload Drive, permitir que a UI nativa do OpenReel acione `Anexar link na apresentacao`.
+
+Decisao para o OpenReel:
+
+- Nao adicionar uma barra APGen paralela.
+- Nao criar OAuth/Drive dentro do OpenReel.
+- Nao assumir conhecimento de trilha, nivel ou matriz.
+- Continuar tratando APGen como parent integrado via `integration=apgen`.
+- Aceitar `APGEN_OPENREEL_IMPORT_MEDIA` como entrada automatica de midia, igual ao contrato ORE-9.
+- Continuar disparando `APGEN_REQUEST_DRIVE_UPLOAD` e `APGEN_REQUEST_APPLY_VIDEO_SLIDE` no pos-export.
+
+Contrato esperado do parent APGen:
+
+```ts
+type ApplyVideoSlidePayload = {
+  webViewLink: string;
+  insertMode: "before-closing";
+  handoffId?: string;
+  projectId?: string | null;
+  trailNodeId?: string | null;
+  presentationId?: string | null;
+};
+```
+
+Regra de UX:
+
+- O video deve chegar em `Assets` e na timeline sem import manual.
+- O usuario deve continuar editando/exportando pelo layout original do OpenReel.
+- A acao de anexar link deve aparecer somente apos upload Drive concluido com sucesso.
+
+Documento APGen do corte:
+
+- `C:\projetos\apgen\docs\openreel-record-edit-flow-contract.md`
+
+Status:
+
+- Implementado em branch `feature/ore-10-record-edit-flow`.
+- No APGen, `Gravar e editar` abre o APGen Video Studio no clique, cria handoff IndexedDB por `handoffId` e importa automaticamente o video no OpenReel via `APGEN_OPENREEL_IMPORT_MEDIA`.
+- O OpenReel manteve a UI nativa: `Record`, `EXPORT`, timeline, assets e acoes pos-export continuam dentro do editor, sem barra APGen paralela.
+- O parent APGen continua responsavel por gravacao, Drive, metadados, aplicacao do slide e matriz.
+- `Gravacao avulsa` no popup `Criar` do APGen passou a abrir o OpenReel/APGen Video Studio em vez do editor antigo.
+- Validado por `pnpm --filter @openreel/web build` no OpenReel e `pnpm build` no APGen.
+- Smoke real com usuario autenticado, OAuth/Drive e export ficou como validacao manual do usuario; bugs encontrados devem entrar como correcao pontual em novo corte.
