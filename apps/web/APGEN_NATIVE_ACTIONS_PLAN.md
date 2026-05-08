@@ -431,5 +431,10 @@ Documento APGen do corte:
 
 Status:
 
-- Planejado em branch `feature/ore-10-record-edit-flow`.
-- Implementacao pendente de aprovacao.
+- Implementado em branch `feature/ore-10-record-edit-flow`.
+- No APGen, `Gravar e editar` abre o APGen Video Studio no clique, cria handoff IndexedDB por `handoffId` e importa automaticamente o video no OpenReel via `APGEN_OPENREEL_IMPORT_MEDIA`.
+- O OpenReel manteve a UI nativa: `Record`, `EXPORT`, timeline, assets e acoes pos-export continuam dentro do editor, sem barra APGen paralela.
+- O parent APGen continua responsavel por gravacao, Drive, metadados, aplicacao do slide e matriz.
+- `Gravacao avulsa` no popup `Criar` do APGen passou a abrir o OpenReel/APGen Video Studio em vez do editor antigo.
+- Validado por `pnpm --filter @openreel/web build` no OpenReel e `pnpm build` no APGen.
+- Smoke real com usuario autenticado, OAuth/Drive e export ficou como validacao manual do usuario; bugs encontrados devem entrar como correcao pontual em novo corte.
