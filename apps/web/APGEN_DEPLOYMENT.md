@@ -111,3 +111,22 @@ Antes de promover para producao:
 - O smoke real de OAuth/Drive exige sessao de usuario e popup do Google; nao e automatizado por CLI.
 - `X-Frame-Options` nao deve voltar como `DENY`, pois bloquearia o iframe no APGen.
 - Se usar dominio proprio fora de `*.vercel.app`, atualizar CSP `frame-ancestors` em `_headers` e `vercel.json`.
+
+## Proximo corte: ORE-9
+
+O proximo corte aprovado para planejamento e remover a barra POC do APGen e integrar as acoes customizadas APGen aos controles nativos do OpenReel.
+
+Documento canonico do plano:
+
+```text
+apps/web/APGEN_NATIVE_ACTIONS_PLAN.md
+```
+
+Direcao:
+
+- manter a UI do OpenReel;
+- remover botoes externos duplicados do APGen;
+- usar `Assets > Add media` para importacao;
+- usar o botao nativo `Record` para gravacao APGen quando em modo integrado;
+- usar o botao nativo `EXPORT` para export local, upload Drive e aplicacao no slide;
+- manter standalone/fallback do OpenReel quando nao houver parent APGen.
