@@ -372,7 +372,7 @@ Implementado em 2026-05-08:
 
 - `ORE-9A`: modo `integration=apgen`, eventos `ready/export-started/export-finished/drive-uploaded` e request/response bidirecional por `postMessage`.
 - `ORE-9B`: barra operacional POC removida da experiencia principal do APGen; debug fica atras de `VITE_OPENREEL_DEBUG_TOOLBAR=true`.
-- `ORE-9C`: botao nativo `Record` tenta gravacao APGen via parent e cai para o recorder nativo OpenReel quando o navegador ou parent bloqueia a acao.
+- `ORE-9C`: botao nativo `Record` tentava gravacao APGen via parent e caia para o recorder nativo OpenReel quando o navegador ou parent bloqueava a acao. Esta decisao foi revisada no ORE-11: em modo integrado, `Record` deve usar somente o recorder nativo do OpenReel para evitar permissao duplicada no APGen.
 - `ORE-9D`: botao nativo `EXPORT` usa export em memoria no modo APGen e mostra acoes inline para Drive/download.
 - `ORE-9E`: apos upload Drive, a acao de aplicar no slide `Videos` fica no estado pos-export do OpenReel.
 
@@ -459,3 +459,28 @@ Status do primeiro corte:
 - O limite duro e 700 MB; importacao e substituicao de midia sao bloqueadas antes do decode quando o total projetado ultrapassa o budget.
 - A regra cobre import manual, gravacao nativa do OpenReel, handoff APGen e substituicao de asset, porque todos passam por `importMedia` ou `replaceMediaAsset`.
 - LRU de object URLs, thumbnails, previews, waveform e buffers de export continua pendente para um segundo corte de otimizacao.
+
+## ORE-11: UX de handoff gravacao/editor
+
+Data: 2026-05-09
+
+Objetivo:
+
+- preservar o botao `Record` nativo do OpenReel sem acionar uma segunda permissao de captura no APGen;
+- receber o nome da apresentacao APGen como nome do projeto atual;
+- liberar o editor apenas depois que a midia enviada pelo APGen estiver importada.
+
+Decisoes:
+
+- `Record` dentro do OpenReel abre somente o recorder nativo do OpenReel.
+- `APGEN_REQUEST_SCREEN_RECORDING` deixa de ser usado como caminho principal no modo integrado.
+- `APGEN_OPENREEL_IMPORT_MEDIA.payload.projectName` passa a ser aceito pelo bridge.
+- Ao receber `projectName`, o OpenReel renomeia o projeto antes de importar a midia e adiciona a gravacao na timeline.
+- O OpenReel envia `APGEN_EDITOR_EVENT` com `event: "media-imported"` apos a importacao, permitindo que o APGen esconda o loading de handoff.
+- A rota `#/new` aceita `projectName` para criar `Current Project` ja nomeado quando o editor e aberto sem midia.
+
+Status:
+
+- Implementado em `apps/web/src/components/editor/Toolbar.tsx`, `apps/web/src/bridges/apgen-bridge.ts` e `apps/web/src/App.tsx`.
+- Validacao automatizada pendente neste documento: `pnpm --filter @openreel/web build`.
+- Validacao manual esperada: abrir APGen, gravar uma apresentacao, responder `Sim` para editar, confirmar nome do projeto e testar `Record` no OpenReel com uma unica permissao.
