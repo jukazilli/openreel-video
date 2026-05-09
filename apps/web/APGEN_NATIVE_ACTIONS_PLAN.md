@@ -484,3 +484,25 @@ Status:
 - Implementado em `apps/web/src/components/editor/Toolbar.tsx`, `apps/web/src/bridges/apgen-bridge.ts` e `apps/web/src/App.tsx`.
 - Validacao automatizada pendente neste documento: `pnpm --filter @openreel/web build`.
 - Validacao manual esperada: abrir APGen, gravar uma apresentacao, responder `Sim` para editar, confirmar nome do projeto e testar `Record` no OpenReel com uma unica permissao.
+
+## ORE-12: restaurar export em iframe APGen
+
+Data: 2026-05-09
+
+Diagnostico:
+
+- Em ambiente hospedado, o OpenReel era aberto pelo APGen como `#/new?dimensions=1920x1080&integration=apgen`.
+- A criacao do projeto redirecionava para `#/editor` sem preservar `integration=apgen`.
+- Com isso, `Toolbar.tsx` tratava o editor como standalone e chamava `showSaveFilePicker`.
+- Browsers bloqueiam `showSaveFilePicker` em iframe cross-origin, gerando: `Cross origin sub frames aren't allowed to show a file picker`.
+
+Decisao:
+
+- `integration=apgen` passa a ser parte tipada de `RouteParams`.
+- Ao sair de `#/new` para `#/editor`, o app preserva `integration=apgen` e `projectName`.
+- O fluxo APGen continua usando export em memoria + bridge para Drive/download, sem abrir file picker nativo dentro do iframe.
+
+Validacao esperada:
+
+- Preview APGen em `/openreel-poc` importa uma midia via bridge e `EXPORT > MP4 Standard` nao mostra erro de `showSaveFilePicker`.
+- Apos export, o estado nativo do OpenReel mostra as acoes APGen de Drive/download/aplicar slide.
