@@ -92,8 +92,16 @@ function App() {
         }
       }
 
+      const requestedProjectName = typeof params.projectName === "string" ? params.projectName.trim() : "";
+      if (requestedProjectName) {
+        projectName = requestedProjectName;
+      }
+
       createNewProject(projectName, { width, height, frameRate });
-      navigate("editor");
+      navigate("editor", {
+        ...(params.integration ? { integration: params.integration } : {}),
+        ...(requestedProjectName ? { projectName: requestedProjectName } : {}),
+      });
     } else if (route === "editor" && skipWelcomeScreen) {
       hasHandledInitialRoute.current = true;
     } else if (["welcome", "templates", "recent"].includes(route)) {

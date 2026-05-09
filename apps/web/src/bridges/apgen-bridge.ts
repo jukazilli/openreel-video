@@ -11,6 +11,7 @@ type ApgenImportMessage = {
   payload?: {
     addToTimeline?: boolean;
     startTime?: number;
+    projectName?: string;
   };
 };
 
@@ -599,9 +600,14 @@ export function installApgenBridge() {
     if (!isApgenImportMessage(event.data)) return;
 
     const { file, payload } = event.data;
-    const { importMedia, addClipToNewTrack } = useProjectStore.getState();
+    const { importMedia, addClipToNewTrack, renameProject } = useProjectStore.getState();
 
     try {
+      const requestedProjectName = payload?.projectName?.trim();
+      if (requestedProjectName) {
+        await assertAction("rename project", renameProject(requestedProjectName));
+      }
+
       const beforeIds = new Set(
         useProjectStore.getState().project.mediaLibrary.items.map((item) => item.id),
       );
@@ -633,6 +639,12 @@ export function installApgenBridge() {
         ok: true,
         fileName: file.name,
         mediaId,
+        projectName: requestedProjectName || useProjectStore.getState().project.name,
+      });
+      notifyApgenEditorEvent("media-imported", {
+        fileName: file.name,
+        mediaId,
+        projectName: requestedProjectName || useProjectStore.getState().project.name,
       });
       toast.success("Imported from APGen", file.name);
     } catch (error) {

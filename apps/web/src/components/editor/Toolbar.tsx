@@ -53,7 +53,6 @@ import {
   isApgenIntegrationMode,
   requestApgenApplyVideoSlide,
   requestApgenDriveUpload,
-  requestApgenScreenRecording,
 } from "../../bridges/apgen-bridge";
 import {
   DropdownMenu,
@@ -137,7 +136,7 @@ export const Toolbar: React.FC = () => {
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isRecorderOpen, setIsRecorderOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const { importMedia, addClipToNewTrack } = useProjectStore();
+  const { importMedia } = useProjectStore();
   const { track } = useAnalytics();
   const apgenIntegrationMode = isApgenIntegrationMode();
 
@@ -640,42 +639,9 @@ export const Toolbar: React.FC = () => {
     [apgenIntegrationMode, project, runApgenVideoExport, runExport, showSavePicker, track],
   );
 
-  const handleRecordClick = useCallback(async () => {
-    if (!apgenIntegrationMode) {
-      setIsRecorderOpen(true);
-      return;
-    }
-
-    try {
-      toast.info(
-        "APGen recording",
-        "Select a screen to capture. Stop sharing in the browser control to finish.",
-      );
-      const response = await requestApgenScreenRecording({
-        includeMicrophone: true,
-        title: project.name || "openreel",
-      });
-
-      if (!response.file) {
-        throw new Error("APGen did not return a recording file");
-      }
-
-      const result = await importMedia(response.file);
-      if (!result.success) {
-        throw new Error(result.error?.message || "Failed to import APGen recording");
-      }
-
-      if (response.payload?.addToTimeline !== false && result.actionId) {
-        await addClipToNewTrack(result.actionId, response.payload?.startTime || 0);
-      }
-
-      toast.success("APGen recording imported", response.file.name);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "APGen recording failed";
-      toast.error("APGen recording unavailable", `${message}. Opening native recorder.`);
-      setIsRecorderOpen(true);
-    }
-  }, [addClipToNewTrack, apgenIntegrationMode, importMedia, project.name]);
+  const handleRecordClick = useCallback(() => {
+    setIsRecorderOpen(true);
+  }, []);
 
 
   const handleRecordingComplete = useCallback(

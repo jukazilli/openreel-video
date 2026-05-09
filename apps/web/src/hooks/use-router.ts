@@ -16,6 +16,8 @@ export interface RouteParams {
   fps?: string;
   tab?: string;
   shareId?: string;
+  projectName?: string;
+  integration?: string;
 }
 
 export interface RouterState {
