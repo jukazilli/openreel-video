@@ -103,6 +103,22 @@ interface ApgenUploadedVideo {
   folderName: string;
 }
 
+function isCrossOriginSubframe() {
+  if (typeof window === "undefined" || window.parent === window) {
+    return false;
+  }
+
+  try {
+    return window.parent.location.origin !== window.location.origin;
+  } catch {
+    return true;
+  }
+}
+
+function canUseNativeSaveFilePicker() {
+  return "showSaveFilePicker" in window && !isCrossOriginSubframe();
+}
+
 export const Toolbar: React.FC = () => {
   const { project } = useProjectStore();
   const {
@@ -252,7 +268,7 @@ export const Toolbar: React.FC = () => {
     };
     const mime = mimeMap[ext] || "application/octet-stream";
 
-    if ("showSaveFilePicker" in window) {
+    if (canUseNativeSaveFilePicker()) {
       const handle = await (window as unknown as {
         showSaveFilePicker: (opts: unknown) => Promise<FileSystemFileHandle>;
       }).showSaveFilePicker({
@@ -465,7 +481,7 @@ export const Toolbar: React.FC = () => {
           }
 
           if (finalResult?.success && finalResult.blob) {
-            if ("showSaveFilePicker" in window) {
+            if (canUseNativeSaveFilePicker()) {
               await finalResult.blob.stream().pipeTo(writable as unknown as WritableStream<Uint8Array>);
             } else {
               const url = URL.createObjectURL(finalResult.blob);
