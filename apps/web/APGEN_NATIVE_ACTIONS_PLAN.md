@@ -506,3 +506,28 @@ Validacao esperada:
 
 - Preview APGen em `/openreel-poc` importa uma midia via bridge e `EXPORT > MP4 Standard` nao mostra erro de `showSaveFilePicker`.
 - Apos export, o estado nativo do OpenReel mostra as acoes APGen de Drive/download/aplicar slide.
+
+## ORE-13: atalhos de gravacao APGen no iframe
+
+Data: 2026-05-09
+
+Objetivo:
+
+- permitir que o usuario controle a gravacao APGen quando o foco estiver no OpenReel integrado.
+
+Atalhos:
+
+- `Alt+X`: pausar;
+- `Alt+C`: continuar;
+- `Alt+Z`: parar.
+
+Decisao:
+
+- o OpenReel nao controla diretamente o `MediaRecorder` do APGen;
+- em `integration=apgen`, o bridge captura os atalhos e envia `APGEN_RECORDING_SHORTCUT` ao parent;
+- o APGen propaga o comando por `BroadcastChannel`, permitindo que a aba que iniciou a gravacao execute a acao.
+
+Limite:
+
+- esses atalhos funcionam com foco no APGen ou no OpenReel integrado;
+- nao funcionam com foco em outro site, app nativo ou area de trabalho sem extensao/browser helper/desktop app.

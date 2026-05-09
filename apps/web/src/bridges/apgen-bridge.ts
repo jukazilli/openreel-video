@@ -122,6 +122,20 @@ let bridgeInstalled = false;
 const createRequestId = () =>
   `apgen-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
+const getRecordingShortcutAction = (
+  event: KeyboardEvent,
+): "pause" | "resume" | "stop" | null => {
+  if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || event.repeat) {
+    return null;
+  }
+
+  const key = event.key.toLowerCase();
+  if (key === "x") return "pause";
+  if (key === "c") return "resume";
+  if (key === "z") return "stop";
+  return null;
+};
+
 const parseHashParams = () => {
   if (typeof window === "undefined") return new URLSearchParams();
   const [, queryString = ""] = window.location.hash.split("?");
@@ -552,6 +566,19 @@ export function installApgenBridge() {
   if (bridgeInstalled || typeof window === "undefined") return;
   bridgeInstalled = true;
   notifyApgenEditorEvent("ready");
+
+  window.addEventListener("keydown", (event) => {
+    const action = getRecordingShortcutAction(event);
+    if (!action || !isApgenIntegrationMode() || !hasParentWindow()) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    window.parent.postMessage({
+      source: "openreel",
+      type: "APGEN_RECORDING_SHORTCUT",
+      payload: { action },
+    }, "*");
+  }, true);
 
   window.addEventListener("message", async (event) => {
     if (isApgenValidateEditingMessage(event.data)) {
