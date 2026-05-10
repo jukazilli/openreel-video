@@ -51,6 +51,8 @@ import { startTour, ONBOARDING_KEY, startMoGraphTour, MOGRAPH_TOUR_KEY } from ".
 import {
   exportApgenEditedVideo,
   isApgenIntegrationMode,
+  normalizeApgenExportFileName,
+  normalizeApgenExportSettings,
   requestApgenApplyVideoSlide,
   requestApgenDriveUpload,
 } from "../../bridges/apgen-bridge";
@@ -353,6 +355,8 @@ export const Toolbar: React.FC = () => {
 
   const runApgenVideoExport = useCallback(
     async (settings: Partial<VideoExportSettings>, fileName: string) => {
+      const apgenSettings = normalizeApgenExportSettings(project.settings, settings);
+      const apgenFileName = normalizeApgenExportFileName(fileName, project.name || "apgen-video-editado");
       setApgenExportResult(null);
       setApgenUploadedVideo(null);
       setExportState({
@@ -363,7 +367,7 @@ export const Toolbar: React.FC = () => {
         complete: false,
       });
 
-      const result = await exportApgenEditedVideo({ fileName, settings });
+      const result = await exportApgenEditedVideo({ fileName: apgenFileName, settings: apgenSettings });
       setApgenExportResult(result);
       setExportState({
         isExporting: false,
@@ -374,11 +378,11 @@ export const Toolbar: React.FC = () => {
       });
 
       track(AnalyticsEvents.PROJECT_EXPORTED, {
-        format: settings.format ?? "webm",
-        codec: settings.codec ?? "vp8",
-        width: settings.width ?? project.settings.width,
-        height: settings.height ?? project.settings.height,
-        frameRate: settings.frameRate ?? project.settings.frameRate,
+        format: apgenSettings.format ?? "webm",
+        codec: apgenSettings.codec ?? "vp8",
+        width: apgenSettings.width ?? project.settings.width,
+        height: apgenSettings.height ?? project.settings.height,
+        frameRate: apgenSettings.frameRate ?? project.settings.frameRate,
         duration: project.timeline?.duration ?? 0,
         exportType: "apgen-drive",
       });

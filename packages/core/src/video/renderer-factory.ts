@@ -39,8 +39,25 @@ export interface Renderer {
   getDevice(): GPUDevice | null;
 }
 
+function isApgenIntegrationMode(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const [, hashQuery = ""] = window.location.hash.split("?");
+  const hashParams = new URLSearchParams(hashQuery);
+  return (
+    searchParams.get("integration") === "apgen" ||
+    hashParams.get("integration") === "apgen"
+  );
+}
+
 export function isWebGPUSupported(): boolean {
   if (typeof navigator === "undefined") {
+    return false;
+  }
+  if (isApgenIntegrationMode()) {
     return false;
   }
   return "gpu" in navigator && navigator.gpu !== undefined;

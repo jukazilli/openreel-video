@@ -111,6 +111,9 @@ Antes de promover para producao:
 - O smoke real de OAuth/Drive exige sessao de usuario e popup do Google; nao e automatizado por CLI.
 - `X-Frame-Options` nao deve voltar como `DENY`, pois bloquearia o iframe no APGen.
 - Se usar dominio proprio fora de `*.vercel.app`, atualizar CSP `frame-ancestors` em `_headers` e `vercel.json`.
+- Em modo `integration=apgen`, o export nativo normaliza a saida para WebM/VP8 em memoria, com limite de 1280x720/30fps, para evitar falhas de H.264/MP4/4K dependentes do WebCodecs do navegador.
+- Em modo `integration=apgen`, o renderer pula WebGPU e usa Canvas2D diretamente. Isso evita warnings de `No GPU adapter` em Windows/headless e mantem o caminho de export previsivel no iframe.
+- Em modo `integration=apgen`, o app nao injeta `manifest.json`; isso evita 401 em previews protegidos por Vercel, onde o manifest nao recebe o bypass do iframe.
 
 ## Proximo corte: ORE-9
 

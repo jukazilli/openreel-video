@@ -4,6 +4,12 @@ import { useTimelineStore } from "../stores/timeline-store";
 import { useUIStore } from "../stores/ui-store";
 import { toast } from "../stores/notification-store";
 
+type ApgenProjectSettings = {
+  width?: number;
+  height?: number;
+  frameRate?: number;
+};
+
 type ApgenImportMessage = {
   source?: string;
   type?: string;
@@ -121,6 +127,46 @@ let bridgeInstalled = false;
 
 const createRequestId = () =>
   `apgen-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const evenDimension = (value: number, fallback: number) => {
+  const normalized = Number.isFinite(value) && value > 0 ? value : fallback;
+  return Math.max(2, Math.floor(normalized / 2) * 2);
+};
+
+export function normalizeApgenExportSettings(
+  projectSettings: ApgenProjectSettings,
+  requestedSettings: Partial<VideoExportSettings> = {},
+): Partial<VideoExportSettings> {
+  const requestedWidth = requestedSettings.width || projectSettings.width || 1280;
+  const requestedHeight = requestedSettings.height || projectSettings.height || 720;
+
+  return {
+    ...requestedSettings,
+    format: "webm",
+    codec: "vp8",
+    width: evenDimension(Math.min(requestedWidth, 1280), 1280),
+    height: evenDimension(Math.min(requestedHeight, 720), 720),
+    frameRate: Math.min(requestedSettings.frameRate || projectSettings.frameRate || 30, 30),
+    bitrate: Math.min(requestedSettings.bitrate || 2500, 2500),
+    quality: Math.min(requestedSettings.quality || 75, 75),
+    upscaling: undefined,
+    audioSettings: {
+      ...requestedSettings.audioSettings,
+      format: "ogg",
+      sampleRate: 48000,
+      bitDepth: 16,
+      bitrate: 128,
+      channels: 2,
+    },
+  };
+}
+
+export function normalizeApgenExportFileName(fileName?: string, projectName = "apgen-video-editado") {
+  const baseName = (fileName || `${projectName}.webm`)
+    .replace(/\.(mp4|mov|webm)$/i, "")
+    .trim() || projectName;
+  return `${baseName}.webm`;
+}
 
 const getRecordingShortcutAction = (
   event: KeyboardEvent,
@@ -341,29 +387,15 @@ const runEditedExport = async (message: ApgenExportEditedMessage) => {
     throw new Error("Timeline is empty. Import and edit a video before exporting.");
   }
 
-  const exportSettings: Partial<VideoExportSettings> = {
-    format: "webm",
-    codec: "vp8",
-    width: Math.min(project.settings.width || 1280, 1280),
-    height: Math.min(project.settings.height || 720, 720),
-    frameRate: Math.min(project.settings.frameRate || 30, 30),
-    bitrate: 2500,
-    quality: 75,
-    audioSettings: {
-      format: "ogg",
-      sampleRate: 48000,
-      bitDepth: 16,
-      bitrate: 128,
-      channels: 2,
-    },
-    ...message.payload?.settings,
-  };
-  const ext = exportSettings.format === "mp4" ? "mp4" : exportSettings.format === "mov" ? "mov" : "webm";
-  const mimeType =
-    ext === "mp4" ? "video/mp4" : ext === "mov" ? "video/quicktime" : "video/webm";
-  const fileName =
-    message.payload?.fileName ||
-    `${project.name || "apgen-video-editado"}.${ext}`;
+  const exportSettings = normalizeApgenExportSettings(
+    project.settings,
+    message.payload?.settings,
+  );
+  const mimeType = "video/webm";
+  const fileName = normalizeApgenExportFileName(
+    message.payload?.fileName,
+    project.name || "apgen-video-editado",
+  );
   const memoryFile = createMemoryWritableFile(mimeType);
   const engine = getExportEngine();
   await engine.initialize();

@@ -6,7 +6,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#002233" />
     <meta name="description" content="Editor de video browser-based para o fluxo APGen." />
-    <link rel="manifest" href="/manifest.json" />
+    <script>
+      (function () {
+        var search = new URLSearchParams(window.location.search);
+        var hashQuery = window.location.hash.split("?")[1] || "";
+        var hash = new URLSearchParams(hashQuery);
+        if (search.get("integration") === "apgen" || hash.get("integration") === "apgen") {
+          return;
+        }
+        var manifest = document.createElement("link");
+        manifest.rel = "manifest";
+        manifest.href = "/manifest.json";
+        document.head.appendChild(manifest);
+      })();
+    </script>
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
