@@ -26,6 +26,7 @@ import { getWavEncoder } from "../wasm/wav";
 
 export class ExportEngine {
   private static readonly AUDIO_EXPORT_CHUNK_DURATION_SECONDS = 15;
+  private static readonly PROGRESS_REPORT_INTERVAL_MS = 100;
   private mediabunny: typeof import("mediabunny") | null = null;
   private initialized = false;
   private videoEngine: VideoEngine | null = null;
@@ -399,6 +400,17 @@ export class ExportEngine {
       audioSource.close();
 
       const mediaEngine = getMediaEngine();
+      try {
+        if (!mediaEngine.isAvailable()) {
+          await mediaEngine.initialize();
+        }
+      } catch (error) {
+        console.warn(
+          "[ExportEngine] Export decoder prewarm unavailable; falling back to per-frame decode:",
+          error,
+        );
+      }
+
       const videoMediaIds: string[] = [];
       for (const track of project.timeline.tracks) {
         if (track.type !== "video") continue;
@@ -427,6 +439,7 @@ export class ExportEngine {
         fullSettings.frameRate * 30,
         300,
       );
+      let lastProgressReportTime = Date.now();
 
       for (let frame = 0; frame < totalFrames; frame++) {
         if (this.abortController.signal.aborted) {
@@ -481,13 +494,22 @@ export class ExportEngine {
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
 
-        yield this.createProgress(
-          "rendering",
-          (frame + 1) / totalFrames,
-          totalFrames,
-          frame + 1,
-          bytesWritten,
-        );
+        const now = Date.now();
+        const shouldReportProgress =
+          frame + 1 === totalFrames ||
+          now - lastProgressReportTime >=
+            ExportEngine.PROGRESS_REPORT_INTERVAL_MS;
+
+        if (shouldReportProgress) {
+          lastProgressReportTime = now;
+          yield this.createProgress(
+            "rendering",
+            (frame + 1) / totalFrames,
+            totalFrames,
+            frame + 1,
+            bytesWritten,
+          );
+        }
       }
 
       videoSource.close();

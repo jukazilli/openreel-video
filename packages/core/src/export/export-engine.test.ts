@@ -488,6 +488,72 @@ describe("ExportEngine", () => {
       expect(mockAudioSourceAdd).toHaveBeenCalledTimes(3);
       expect(mockAudioEngine.clearCache).toHaveBeenCalled();
     });
+
+    it("should initialize media engine before prewarming export decoders", async () => {
+      const project = createMockProject({
+        mediaLibrary: {
+          items: [
+            {
+              id: "media-1",
+              name: "clip.mp4",
+              type: "video",
+              url: "blob:clip",
+              blob: new Blob(["video"], { type: "video/mp4" }),
+              duration: 1,
+              thumbnail: "",
+              metadata: {
+                duration: 1,
+                width: 640,
+                height: 360,
+                frameRate: 30,
+                codec: "h264",
+                sampleRate: 48000,
+                channels: 2,
+                fileSize: 5,
+                mimeType: "video/mp4",
+              },
+            },
+          ],
+        },
+        timeline: createMockTimeline({
+          tracks: [
+            createMockTrack({
+              clips: [createMockClip({ duration: 1, outPoint: 1 })],
+            }),
+          ],
+          duration: 1,
+        }),
+      });
+
+      mockMediaEngine.isAvailable.mockReturnValue(false);
+
+      await exportEngine.initialize();
+
+      const writableStream = {
+        seek: vi.fn().mockResolvedValue(undefined),
+        write: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+        abort: vi.fn().mockResolvedValue(undefined),
+      } as unknown as FileSystemWritableFileStream;
+
+      const generator = exportEngine.exportVideo(
+        project,
+        { ...DEFAULT_VIDEO_SETTINGS, frameRate: 1, width: 640, height: 360 },
+        writableStream,
+      );
+
+      while (true) {
+        const { done } = await generator.next();
+        if (done) break;
+      }
+
+      expect(mockMediaEngine.initialize).toHaveBeenCalled();
+      expect(mockMediaEngine.createExportDecoder).toHaveBeenCalledWith(
+        "media-1",
+        expect.any(Blob),
+        640,
+      );
+    });
   });
 
   describe("dispose", () => {

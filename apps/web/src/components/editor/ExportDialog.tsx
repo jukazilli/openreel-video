@@ -142,15 +142,15 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     width: projectWidth,
     height: projectHeight,
     frameRate: 30,
-    bitrate: 15000,
+    bitrate: 5000,
     bitrateMode: "vbr",
-    quality: 90,
+    quality: 82,
     keyframeInterval: 60,
     audioSettings: {
       format: "aac",
       sampleRate: 48000,
       bitDepth: 16,
-      bitrate: 256,
+      bitrate: 128,
       channels: 2,
     },
     upscaling: {

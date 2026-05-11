@@ -118,6 +118,10 @@ function canUseNativeSaveFilePicker() {
   return "showSaveFilePicker" in window && !isCrossOriginSubframe();
 }
 
+function clampBitrateKbps(value: number, min: number, max: number): number {
+  return Math.round(Math.min(Math.max(value, min), max));
+}
+
 export const Toolbar: React.FC = () => {
   const { project } = useProjectStore();
   const {
@@ -219,6 +223,66 @@ export const Toolbar: React.FC = () => {
   const handleSearch = useCallback(() => {
     openModal("search");
   }, [openModal]);
+
+  const getEfficientVideoBitrate = useCallback(
+    (width: number, height: number, frameRate: number): number => {
+      const activeMediaIds = new Set<string>();
+      for (const track of project.timeline.tracks) {
+        if (track.type !== "video") continue;
+        for (const clip of track.clips) {
+          activeMediaIds.add(clip.mediaId);
+        }
+      }
+
+      let sourceBitrateKbps = 0;
+      for (const item of project.mediaLibrary.items) {
+        if (!activeMediaIds.has(item.id) || item.type !== "video") continue;
+        const metadata = item.metadata as {
+          videoBitrate?: number;
+          fileSize?: number;
+          duration?: number;
+        };
+
+        if (metadata.videoBitrate && metadata.videoBitrate > 0) {
+          sourceBitrateKbps = Math.max(
+            sourceBitrateKbps,
+            metadata.videoBitrate / 1000,
+          );
+        } else if (
+          metadata.fileSize &&
+          metadata.duration &&
+          metadata.duration > 0
+        ) {
+          sourceBitrateKbps = Math.max(
+            sourceBitrateKbps,
+            (metadata.fileSize * 8) / metadata.duration / 1000,
+          );
+        }
+      }
+
+      const pixels = width * height;
+      const resolutionBaseline =
+        pixels >= 3840 * 2160
+          ? 12000
+          : pixels >= 1920 * 1080
+            ? 4500
+            : pixels >= 1280 * 720
+              ? 2500
+              : 1400;
+      const fpsMultiplier = frameRate > 30 ? 1.5 : 1;
+      const fallbackBitrate = resolutionBaseline * fpsMultiplier;
+      const sourceAwareBitrate =
+        sourceBitrateKbps > 0 ? sourceBitrateKbps * 1.35 : fallbackBitrate;
+      const upperLimit = pixels >= 3840 * 2160 ? 20000 : 9000;
+
+      return clampBitrateKbps(
+        Math.min(sourceAwareBitrate, fallbackBitrate),
+        1200,
+        upperLimit,
+      );
+    },
+    [project.mediaLibrary.items, project.timeline.tracks],
+  );
 
   const runExport = useCallback(
     async (videoSettings: Partial<VideoExportSettings>, _ext: string, writableStream: FileSystemWritableFileStream) => {
@@ -507,17 +571,32 @@ export const Toolbar: React.FC = () => {
             height: project.settings.height,
             frameRate: project.settings.frameRate,
           };
+          const efficientProjectBitrate = getEfficientVideoBitrate(
+            base.width,
+            base.height,
+            base.frameRate,
+          );
+          const efficient1080pBitrate = getEfficientVideoBitrate(
+            1920,
+            1080,
+            30,
+          );
+          const efficient1080p60Bitrate = getEfficientVideoBitrate(
+            1920,
+            1080,
+            60,
+          );
 
           const presets: Record<string, { settings: Partial<VideoExportSettings>; ext: string }> = {
-            mp4: { settings: { ...base, format: "mp4", codec: "h264", bitrate: 12000, quality: 85 }, ext: "mp4" },
-            gif: { settings: { ...base, format: "webm", codec: "vp9", bitrate: 8000 }, ext: "webm" },
-            project: { settings: { ...base, format: "mp4", codec: "h264", bitrate: 12000, quality: 85 }, ext: "mp4" },
+            mp4: { settings: { ...base, format: "mp4", codec: "h264", bitrate: efficientProjectBitrate, quality: 80 }, ext: "mp4" },
+            gif: { settings: { ...base, format: "webm", codec: "vp9", bitrate: Math.min(efficientProjectBitrate, 4000) }, ext: "webm" },
+            project: { settings: { ...base, format: "mp4", codec: "h264", bitrate: efficientProjectBitrate, quality: 80 }, ext: "mp4" },
             "4k-60-master": { settings: { ...base, width: 3840, height: 2160, frameRate: 60, format: "mov", codec: "h265", bitrate: 100000, quality: 95 }, ext: "mov" },
             "4k-master": { settings: { ...base, width: 3840, height: 2160, frameRate: 30, format: "mov", codec: "h265", bitrate: 80000, quality: 95 }, ext: "mov" },
             "4k-prores": { settings: { ...base, width: 3840, height: 2160, frameRate: 30, format: "mov", codec: "prores", bitrate: 880000, quality: 100 }, ext: "mov" },
             "4k": { settings: { ...base, width: 3840, height: 2160, frameRate: 30, format: "mp4", codec: "h264", bitrate: 50000, quality: 90 }, ext: "mp4" },
-            "1080p-60": { settings: { ...base, width: 1920, height: 1080, frameRate: 60, format: "mp4", codec: "h264", bitrate: 25000, quality: 95 }, ext: "mp4" },
-            "1080p-high": { settings: { ...base, width: 1920, height: 1080, frameRate: 30, format: "mp4", codec: "h264", bitrate: 20000, quality: 95 }, ext: "mp4" },
+            "1080p-60": { settings: { ...base, width: 1920, height: 1080, frameRate: 60, format: "mp4", codec: "h264", bitrate: efficient1080p60Bitrate, quality: 82 }, ext: "mp4" },
+            "1080p-high": { settings: { ...base, width: 1920, height: 1080, frameRate: 30, format: "mp4", codec: "h264", bitrate: efficient1080pBitrate, quality: 82 }, ext: "mp4" },
             prores: { settings: { ...base, format: "mov", codec: "prores", bitrate: 220000, quality: 100 }, ext: "mov" },
           };
 
@@ -561,7 +640,7 @@ export const Toolbar: React.FC = () => {
         }));
       }
     },
-    [apgenIntegrationMode, project, runApgenVideoExport, runExport, showSavePicker, track],
+    [apgenIntegrationMode, getEfficientVideoBitrate, project, runApgenVideoExport, runExport, showSavePicker, track],
   );
 
   const handleCancelExport = useCallback(() => {
@@ -701,7 +780,7 @@ export const Toolbar: React.FC = () => {
     [importMedia],
   );
 
-  const projectRes = `${project.settings.width}×${project.settings.height}`;
+  const projectRes = `${project.settings.width}x${project.settings.height}`;
   const aspectRatio = project.settings.width / project.settings.height;
   const isVertical = aspectRatio < 0.9;
 
@@ -733,20 +812,20 @@ export const Toolbar: React.FC = () => {
           {
             label: "4K Standard",
             icon: FileVideo,
-            desc: "3840×2160 - YouTube 4K",
+            desc: "3840x2160 - YouTube 4K",
             type: "4k" as ExportType,
           },
         ]),
     {
-      label: "1080p High Quality",
+      label: "1080p Efficient",
       icon: FileVideo,
-      desc: "1920×1080 30fps - High bitrate",
+      desc: "1920x1080 30fps - Smaller file",
       type: "1080p-high",
     },
     {
       label: "1080p 60fps",
       icon: FileVideo,
-      desc: "1920×1080 - Smooth playback",
+      desc: "1920x1080 - Smooth playback",
       type: "1080p-60",
     },
     {
