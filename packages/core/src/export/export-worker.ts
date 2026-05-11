@@ -140,8 +140,11 @@ async function initialize(
     videoSource = new VideoSampleSource({
       codec: videoCodec,
       bitrate: settings.bitrate ? settings.bitrate * 1000 : QUALITY_MEDIUM,
+      bitrateMode: settings.bitrateMode === "cbr" ? "constant" : "variable",
       keyFrameInterval: settings.keyframeInterval / settings.frameRate,
       hardwareAcceleration: "prefer-hardware",
+      latencyMode: "realtime",
+      contentHint: "motion",
     });
 
     audioSource = new AudioSampleSource({

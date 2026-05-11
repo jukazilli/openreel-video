@@ -23,6 +23,8 @@ import { graphicsEngine } from "../graphics/graphics-engine";
 import { UpscalingEngine, getUpscalingEngine } from "../video/upscaling";
 import { getMediaEngine } from "../media/mediabunny-engine";
 import { getWavEncoder } from "../wasm/wav";
+import type { Clip, Track, Transform } from "../types/timeline";
+import type { MediaItem } from "../types/project";
 
 export class ExportEngine {
   private static readonly AUDIO_EXPORT_CHUNK_DURATION_SECONDS = 15;
@@ -306,6 +308,64 @@ export class ExportEngine {
     try {
       yield this.createProgress("preparing", 0, totalFrames, 0, 0);
 
+      const directConversion = this.getDirectConversionCandidate(
+        project,
+        fullSettings,
+      );
+      if (directConversion) {
+        yield this.createProgress("encoding", 0.05, totalFrames, 0, 0);
+
+        const mediaEngine = getMediaEngine();
+        if (!mediaEngine.isAvailable()) {
+          await mediaEngine.initialize();
+        }
+
+        const sourceStart = Math.max(0, directConversion.clip.inPoint);
+        const sourceEnd = Math.max(
+          sourceStart,
+          Math.min(
+            directConversion.clip.outPoint,
+            directConversion.clip.inPoint + directConversion.clip.duration,
+          ),
+        );
+        const blob = await mediaEngine.trimMedia(
+          directConversion.mediaItem.blob!,
+          sourceStart,
+          sourceEnd,
+          {
+            format: "mp4",
+            width: fullSettings.width,
+            height: fullSettings.height,
+            frameRate: fullSettings.frameRate,
+            videoBitrate: fullSettings.bitrate * 1000,
+            audioBitrate: fullSettings.audioSettings.bitrate * 1000,
+            sampleRate: fullSettings.audioSettings.sampleRate,
+            channels: fullSettings.audioSettings.channels,
+          },
+          undefined,
+          this.abortController.signal,
+        );
+
+        const buffer = await blob.arrayBuffer();
+        await writableStream.write(buffer);
+        bytesWritten = blob.size;
+        await writableStream.close();
+        this.currentExport!.framesRendered = totalFrames;
+
+        yield this.createProgress(
+          "complete",
+          1,
+          totalFrames,
+          totalFrames,
+          bytesWritten,
+        );
+
+        return {
+          success: true,
+          stats: this.calculateStats(totalFrames, bytesWritten),
+        };
+      }
+
       const {
         Output,
         StreamTarget,
@@ -375,9 +435,13 @@ export class ExportEngine {
       const videoSource = new VideoSampleSource({
         codec: videoCodec,
         bitrate: fullSettings.bitrate ? fullSettings.bitrate * 1000 : QUALITY_MEDIUM,
+        bitrateMode:
+          fullSettings.bitrateMode === "cbr" ? "constant" : "variable",
         keyFrameInterval:
           fullSettings.keyframeInterval / fullSettings.frameRate,
         hardwareAcceleration: "prefer-hardware",
+        latencyMode: "realtime",
+        contentHint: "motion",
       });
       const audioSource = new AudioBufferSource({
         codec: audioCodecResult.codec as "aac" | "opus" | "mp3",
@@ -1077,6 +1141,103 @@ export class ExportEngine {
     } else {
       return duration * 0.1;
     }
+  }
+
+  private getDirectConversionCandidate(
+    project: Project,
+    settings: VideoExportSettings,
+  ): { clip: Clip; mediaItem: MediaItem } | null {
+    if (settings.format !== "mp4" || settings.codec !== "h264") {
+      return null;
+    }
+
+    if (settings.upscaling?.enabled) {
+      return null;
+    }
+
+    if (project.timeline.subtitles?.length > 0) {
+      return null;
+    }
+
+    if (
+      titleEngine.getAllTextClips().length > 0 ||
+      graphicsEngine.getAllShapeClips().length > 0 ||
+      graphicsEngine.getAllSVGClips().length > 0 ||
+      graphicsEngine.getAllStickerClips().length > 0
+    ) {
+      return null;
+    }
+
+    const visibleVisualTracks = project.timeline.tracks.filter(
+      (track) =>
+        !track.hidden &&
+        (track.type === "video" ||
+          track.type === "image" ||
+          track.type === "text" ||
+          track.type === "graphics") &&
+        track.clips.length > 0,
+    );
+
+    if (visibleVisualTracks.length !== 1) {
+      return null;
+    }
+
+    const track = visibleVisualTracks[0];
+    if (
+      track.type !== "video" ||
+      track.transitions.length > 0 ||
+      track.clips.length !== 1
+    ) {
+      return null;
+    }
+
+    const clip = track.clips[0];
+    if (!this.canDirectConvertClip(clip, track)) {
+      return null;
+    }
+
+    const mediaItem = project.mediaLibrary.items.find(
+      (item) => item.id === clip.mediaId,
+    );
+    if (mediaItem?.type !== "video" || !mediaItem.blob) {
+      return null;
+    }
+
+    return { clip, mediaItem };
+  }
+
+  private canDirectConvertClip(clip: Clip, track: Track): boolean {
+    return (
+      track.transitions.length === 0 &&
+      clip.startTime === 0 &&
+      clip.effects.length === 0 &&
+      clip.audioEffects.length === 0 &&
+      clip.keyframes.length === 0 &&
+      !clip.fade &&
+      !clip.automation &&
+      !clip.speed &&
+      !clip.reversed &&
+      !clip.emphasisAnimation &&
+      clip.volume === 1 &&
+      this.isDefaultTransform(clip.transform)
+    );
+  }
+
+  private isDefaultTransform(transform: Transform): boolean {
+    return (
+      transform.position.x === 0.5 &&
+      transform.position.y === 0.5 &&
+      transform.scale.x === 1 &&
+      transform.scale.y === 1 &&
+      transform.rotation === 0 &&
+      transform.anchor.x === 0.5 &&
+      transform.anchor.y === 0.5 &&
+      transform.opacity === 1 &&
+      !transform.borderRadius &&
+      !transform.crop &&
+      !transform.rotate3d &&
+      !transform.perspective
+    );
   }
 
   private async renderTimelineAudio(

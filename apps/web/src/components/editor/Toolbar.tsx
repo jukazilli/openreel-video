@@ -569,7 +569,7 @@ export const Toolbar: React.FC = () => {
           const base = {
             width: project.settings.width,
             height: project.settings.height,
-            frameRate: project.settings.frameRate,
+            frameRate: Math.min(project.settings.frameRate, 30),
           };
           const efficientProjectBitrate = getEfficientVideoBitrate(
             base.width,

@@ -917,20 +917,41 @@ export class MediaBunnyEngine {
       target: new BufferTarget(),
     });
 
-    const conversion = await Conversion.init({
+    const conversionOptions: Record<string, unknown> = {
       input,
       output,
       trim: {
         start: startTime,
         end: endTime,
       },
-      ...(settings?.videoBitrate && {
-        video: { bitrate: settings.videoBitrate },
-      }),
-      ...(settings?.audioBitrate && {
-        audio: { bitrate: settings.audioBitrate },
-      }),
-    });
+    };
+
+    if (
+      settings?.videoBitrate ||
+      settings?.width ||
+      settings?.height ||
+      settings?.frameRate
+    ) {
+      conversionOptions.video = {
+        ...(settings.videoBitrate && { bitrate: settings.videoBitrate }),
+        ...(settings.width && { width: settings.width }),
+        ...(settings.height && { height: settings.height }),
+        ...(settings.frameRate && { frameRate: settings.frameRate }),
+        ...(settings.width && settings.height && { fit: "contain" }),
+      };
+    }
+
+    if (settings?.audioBitrate || settings?.sampleRate || settings?.channels) {
+      conversionOptions.audio = {
+        ...(settings.audioBitrate && { bitrate: settings.audioBitrate }),
+        ...(settings.sampleRate && { sampleRate: settings.sampleRate }),
+        ...(settings.channels && { numberOfChannels: settings.channels }),
+      };
+    }
+
+    const conversion = await Conversion.init(
+      conversionOptions as ConversionOptions,
+    );
 
     if (!conversion.isValid) {
       const reasons = conversion.discardedTracks

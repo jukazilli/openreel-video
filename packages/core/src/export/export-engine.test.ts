@@ -42,6 +42,7 @@ const {
     initialize: vi.fn().mockResolvedValue(undefined),
     getExportDecoder: vi.fn().mockReturnValue(null),
     createExportDecoder: vi.fn().mockResolvedValue(null),
+    trimMedia: vi.fn().mockResolvedValue(new Blob(["fast-video"])),
     disposeAllExportDecoders: vi.fn(),
     clearFrameCache: vi.fn(),
   };
@@ -413,7 +414,20 @@ describe("ExportEngine", () => {
         timeline: createMockTimeline({
           tracks: [
             createMockTrack({
-              clips: [createMockClip({ duration: 1, outPoint: 1 })],
+              clips: [
+                createMockClip({
+                  duration: 1,
+                  outPoint: 1,
+                  effects: [
+                    {
+                      id: "effect-1",
+                      type: "brightness",
+                      params: { value: 1 },
+                      enabled: true,
+                    },
+                  ],
+                }),
+              ],
             }),
           ],
           duration: 1,
@@ -443,6 +457,8 @@ describe("ExportEngine", () => {
       expect(mockVideoSampleSourceConfig).toHaveBeenCalledWith(
         expect.objectContaining({
           hardwareAcceleration: "prefer-hardware",
+          latencyMode: "realtime",
+          contentHint: "motion",
         }),
       );
     });
@@ -497,10 +513,10 @@ describe("ExportEngine", () => {
               id: "media-1",
               name: "clip.mp4",
               type: "video",
-              url: "blob:clip",
+              fileHandle: null,
               blob: new Blob(["video"], { type: "video/mp4" }),
-              duration: 1,
-              thumbnail: "",
+              thumbnailUrl: null,
+              waveformData: null,
               metadata: {
                 duration: 1,
                 width: 640,
@@ -510,7 +526,6 @@ describe("ExportEngine", () => {
                 sampleRate: 48000,
                 channels: 2,
                 fileSize: 5,
-                mimeType: "video/mp4",
               },
             },
           ],
@@ -518,7 +533,20 @@ describe("ExportEngine", () => {
         timeline: createMockTimeline({
           tracks: [
             createMockTrack({
-              clips: [createMockClip({ duration: 1, outPoint: 1 })],
+              clips: [
+                createMockClip({
+                  duration: 1,
+                  outPoint: 1,
+                  effects: [
+                    {
+                      id: "effect-1",
+                      type: "brightness",
+                      params: { value: 1 },
+                      enabled: true,
+                    },
+                  ],
+                }),
+              ],
             }),
           ],
           duration: 1,
@@ -553,6 +581,80 @@ describe("ExportEngine", () => {
         expect.any(Blob),
         640,
       );
+    });
+
+    it("should use direct media conversion for a simple single-clip mp4 export", async () => {
+      const project = createMockProject({
+        mediaLibrary: {
+          items: [
+            {
+              id: "media-1",
+              name: "clip.mp4",
+              type: "video",
+              fileHandle: null,
+              blob: new Blob(["video"], { type: "video/mp4" }),
+              thumbnailUrl: null,
+              waveformData: null,
+              metadata: {
+                duration: 5,
+                width: 640,
+                height: 360,
+                frameRate: 30,
+                codec: "h264",
+                sampleRate: 48000,
+                channels: 2,
+                fileSize: 5,
+              },
+            },
+          ],
+        },
+        timeline: createMockTimeline({
+          tracks: [
+            createMockTrack({
+              clips: [createMockClip({ duration: 5, outPoint: 5 })],
+            }),
+          ],
+          duration: 5,
+        }),
+      });
+
+      await exportEngine.initialize();
+
+      const writableStream = {
+        seek: vi.fn().mockResolvedValue(undefined),
+        write: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+        abort: vi.fn().mockResolvedValue(undefined),
+      } as unknown as FileSystemWritableFileStream;
+
+      const generator = exportEngine.exportVideo(
+        project,
+        { ...DEFAULT_VIDEO_SETTINGS, frameRate: 30, width: 640, height: 360 },
+        writableStream,
+      );
+
+      while (true) {
+        const { done } = await generator.next();
+        if (done) break;
+      }
+
+      expect(mockMediaEngine.trimMedia).toHaveBeenCalledWith(
+        expect.any(Blob),
+        0,
+        5,
+        expect.objectContaining({
+          format: "mp4",
+          width: 640,
+          height: 360,
+          frameRate: 30,
+          videoBitrate: DEFAULT_VIDEO_SETTINGS.bitrate * 1000,
+        }),
+        undefined,
+        expect.any(AbortSignal),
+      );
+      expect(mockRenderFrame).not.toHaveBeenCalled();
+      expect(writableStream.write).toHaveBeenCalled();
+      expect(writableStream.close).toHaveBeenCalled();
     });
   });
 
