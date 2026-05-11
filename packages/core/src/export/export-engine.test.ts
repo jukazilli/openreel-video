@@ -7,6 +7,7 @@ const {
   mockAudioEngine,
   mockMediaEngine,
   mockVideoSourceAdd,
+  mockVideoSampleSourceConfig,
   mockAudioSourceAdd,
   mockOutputStart,
   mockOutputFinalize,
@@ -52,6 +53,7 @@ const {
     mockAudioEngine,
     mockMediaEngine,
     mockVideoSourceAdd: vi.fn().mockResolvedValue(undefined),
+    mockVideoSampleSourceConfig: vi.fn(),
     mockAudioSourceAdd: vi.fn().mockResolvedValue(undefined),
     mockOutputStart: vi.fn().mockResolvedValue(undefined),
     mockOutputFinalize: vi.fn().mockResolvedValue(undefined),
@@ -119,7 +121,9 @@ vi.mock("mediabunny", () => {
     add = mockVideoSourceAdd;
     close = vi.fn();
 
-    constructor(_config: Record<string, unknown>) {}
+    constructor(config: Record<string, unknown>) {
+      mockVideoSampleSourceConfig(config);
+    }
   }
 
   class MockAudioBufferSource {
@@ -404,6 +408,45 @@ describe("ExportEngine", () => {
   });
 
   describe("video export", () => {
+    it("should prefer hardware accelerated encoding", async () => {
+      const project = createMockProject({
+        timeline: createMockTimeline({
+          tracks: [
+            createMockTrack({
+              clips: [createMockClip({ duration: 1, outPoint: 1 })],
+            }),
+          ],
+          duration: 1,
+        }),
+      });
+
+      await exportEngine.initialize();
+
+      const writableStream = {
+        seek: vi.fn().mockResolvedValue(undefined),
+        write: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+        abort: vi.fn().mockResolvedValue(undefined),
+      } as unknown as FileSystemWritableFileStream;
+
+      const generator = exportEngine.exportVideo(
+        project,
+        { ...DEFAULT_VIDEO_SETTINGS, frameRate: 1, width: 640, height: 360 },
+        writableStream,
+      );
+
+      while (true) {
+        const { done } = await generator.next();
+        if (done) break;
+      }
+
+      expect(mockVideoSampleSourceConfig).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hardwareAcceleration: "prefer-hardware",
+        }),
+      );
+    });
+
     it("should render long export audio in chunks and clear cached audio", async () => {
       const project = createMockProject({
         timeline: createMockTimeline({

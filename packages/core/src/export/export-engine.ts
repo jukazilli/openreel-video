@@ -376,7 +376,7 @@ export class ExportEngine {
         bitrate: fullSettings.bitrate ? fullSettings.bitrate * 1000 : QUALITY_MEDIUM,
         keyFrameInterval:
           fullSettings.keyframeInterval / fullSettings.frameRate,
-        hardwareAcceleration: "prefer-software",
+        hardwareAcceleration: "prefer-hardware",
       });
       const audioSource = new AudioBufferSource({
         codec: audioCodecResult.codec as "aac" | "opus" | "mp3",
@@ -419,6 +419,15 @@ export class ExportEngine {
         }
       }
 
+      const frameCachePruneInterval = Math.max(
+        fullSettings.frameRate * 10,
+        120,
+      );
+      const videoElementPruneInterval = Math.max(
+        fullSettings.frameRate * 30,
+        300,
+      );
+
       for (let frame = 0; frame < totalFrames; frame++) {
         if (this.abortController.signal.aborted) {
           throw this.createError(
@@ -460,13 +469,16 @@ export class ExportEngine {
 
         this.currentExport!.framesRendered = frame + 1;
 
-        if ((frame + 1) % 5 === 0) {
-          this.videoEngine?.clearVideoElementCache();
-          this.videoEngine?.clearCache();
+        if ((frame + 1) % frameCachePruneInterval === 0) {
           try {
             mediaEngine.clearFrameCache();
           } catch {}
-          await new Promise((resolve) => setTimeout(resolve, 2));
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        if ((frame + 1) % videoElementPruneInterval === 0) {
+          this.videoEngine?.clearVideoElementCache();
+          await new Promise((resolve) => setTimeout(resolve, 0));
         }
 
         yield this.createProgress(
