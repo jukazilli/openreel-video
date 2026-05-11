@@ -90,6 +90,7 @@ export class VideoEngine {
     string,
     { video: HTMLVideoElement; url: string }
   > = new Map();
+  private failedVideoElementMediaIds: Set<string> = new Set();
 
   private gpuCompositor: GPUCompositor | null = null;
   private gpuRenderer: Renderer | null = null;
@@ -284,6 +285,10 @@ export class VideoEngine {
     width: number,
     height: number,
   ): Promise<ImageBitmap | null> {
+    if (this.failedVideoElementMediaIds.has(mediaId)) {
+      return null;
+    }
+
     let cached = this.videoElementCache.get(mediaId);
 
     if (!cached) {
@@ -294,11 +299,40 @@ export class VideoEngine {
       video.playsInline = true;
       video.preload = "auto";
 
-      await new Promise<void>((resolve, reject) => {
-        video.onloadedmetadata = () => resolve();
-        video.onerror = () => reject(new Error("Video load failed"));
-        setTimeout(() => reject(new Error("Video load timeout")), 10000);
-      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          let settled = false;
+          const cleanup = () => {
+            clearTimeout(timeoutId);
+            video.onloadedmetadata = null;
+            video.onerror = null;
+          };
+          const resolveOnce = () => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            resolve();
+          };
+          const rejectOnce = (error: Error) => {
+            if (settled) return;
+            settled = true;
+            cleanup();
+            reject(error);
+          };
+          const timeoutId = setTimeout(
+            () => rejectOnce(new Error("Video load timeout")),
+            30000,
+          );
+          video.onloadedmetadata = resolveOnce;
+          video.onerror = () => rejectOnce(new Error("Video load failed"));
+        });
+      } catch (error) {
+        this.failedVideoElementMediaIds.add(mediaId);
+        video.removeAttribute("src");
+        video.load();
+        URL.revokeObjectURL(url);
+        throw error;
+      }
 
       cached = { video, url };
       this.videoElementCache.set(mediaId, cached);
@@ -376,6 +410,7 @@ export class VideoEngine {
       URL.revokeObjectURL(cached.url);
     }
     this.videoElementCache.clear();
+    this.failedVideoElementMediaIds.clear();
   }
 
   private ensureInitialized(): void {
@@ -507,13 +542,21 @@ export class VideoEngine {
               clipInfo.mediaId,
             );
             if (!bitmap) {
-              bitmap = await this.decodeFrameWithVideoElement(
-                mediaItem.id,
-                mediaItem.blob,
-                clipInfo.sourceTime,
-                settings.width,
-                settings.height,
-              );
+              try {
+                bitmap = await this.decodeFrameWithVideoElement(
+                  mediaItem.id,
+                  mediaItem.blob,
+                  clipInfo.sourceTime,
+                  settings.width,
+                  settings.height,
+                );
+              } catch (error) {
+                console.warn(
+                  `[VideoEngine] Video element fallback failed for media ${mediaItem.id}:`,
+                  error,
+                );
+                bitmap = null;
+              }
             }
           }
 
@@ -2301,6 +2344,7 @@ export class VideoEngine {
     this.decodeCanvas = null;
     this.decodeCtx = null;
     this.preloadQueue = [];
+    this.failedVideoElementMediaIds.clear();
     this.initialized = false;
     this.mediabunny = null;
   }
